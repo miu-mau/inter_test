@@ -3,12 +3,14 @@
 после клонирования проекта ввести в терминале:
 
 ```
+
 go mod tidy
 ```
 
 для запуска сервера ввести в терминале:
 
 ```
+
 go run main.go
 ```
 
@@ -19,6 +21,7 @@ go run main.go
 Запрос
 
 ```
+
 POST http://localhost:8080/tasks
 
 {
@@ -31,6 +34,7 @@ POST http://localhost:8080/tasks
 Ответ
 
 ```
+
 201 Created
 Content-Type: application/json
 
@@ -47,12 +51,14 @@ Content-Type: application/json
 Запрос
 
 ```
+
 GET http://localhost:8080/tasks
 ```
 
 Ответ
 
 ```
+
 200 OK
 Content-Type: application/json
 
@@ -77,13 +83,14 @@ Content-Type: application/json
 Запрос
 
 ```
-GET http://localhost:8080/tasks/1
 
+GET http://localhost:8080/tasks/1
 ```
 
 Ответ
 
 ```
+
 200 OK
 Content-Type: application/json
 
@@ -98,12 +105,14 @@ Content-Type: application/json
 Запрос с несуществующим id
 
 ```
+
 GET http://localhost:8080/tasks/9
 ```
 
 Ответ
 
 ```
+
 404 Not Found
 Content-Type: application/json
 
@@ -117,6 +126,7 @@ Content-Type: application/json
 Запрос
 
 ```
+
 PUT http://localhost:8080/tasks/1
 
 {
@@ -129,6 +139,7 @@ PUT http://localhost:8080/tasks/1
 Ответ
 
 ```
+
 200 OK
 Content-Type: application/json
 {
@@ -137,18 +148,19 @@ Content-Type: application/json
     "description": "да побольше",
     "completed": true
 }
-
 ```
 ## DELETE /tasks/{id}
 
 Запрос
 
 ```
+
 DELETE http://localhost:8080/tasks/1
 ```
 
 Ответ
 
 ```
+
 204 No Content
 ```
