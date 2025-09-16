@@ -212,6 +212,9 @@ func main() {
 		}
 	}).Methods(http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodOptions)
 
+	// register auth routes
+	registerAuthRoutes(r)
+
 	addr := ":8080"
 	fmt.Printf("Server listening on %s\n", addr)
 	log.Fatal(http.ListenAndServe(addr, r))
