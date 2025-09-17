@@ -107,6 +107,13 @@ func main() {
 	store := NewStore()
 	r := mux.NewRouter()
 
+	// shared auth stores
+	users := NewUsersStore()
+	refreshes := NewRefreshStore()
+	if err := seedDefaultAdmin(users); err != nil {
+		log.Fatalf("seed admin failed: %v", err)
+	}
+
 	r.HandleFunc("/tasks", func(w http.ResponseWriter, r *http.Request) {
 		// POST /tasks - создание
 		if r.Method == http.MethodPost {
@@ -212,8 +219,9 @@ func main() {
 		}
 	}).Methods(http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodOptions)
 
-	// register auth routes
-	registerAuthRoutes(r)
+	// auth and admin routes
+	registerAuthRoutes(r, users, refreshes)
+	registerAdminRoutes(r, users)
 
 	addr := ":8080"
 	fmt.Printf("Server listening on %s\n", addr)

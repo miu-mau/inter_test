@@ -25,6 +25,7 @@ type User struct {
 	Email        string `json:"email"`
 	PasswordHash string `json:"-"`
 	IsActive     bool   `json:"isActive"`
+	IsAdmin      bool   `json:"isAdmin"`
 }
 
 type UsersStore struct {
@@ -75,7 +76,62 @@ func (s *UsersStore) GetByID(id int64) (*User, bool) {
 	return u, ok
 }
 
-// --------------------
+func (s *UsersStore) GetAll() []*User {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*User, 0, len(s.usersByID))
+	for _, u := range s.usersByID {
+		out = append(out, &User{ID: u.ID, Username: u.Username, Email: u.Email, IsActive: u.IsActive, IsAdmin: u.IsAdmin})
+	}
+	return out
+}
+
+func (s *UsersStore) Update(id int64, upd *User) (*User, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.usersByID[id]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	// handle username uniqueness
+	if upd.Username != "" && !strings.EqualFold(upd.Username, u.Username) {
+		if _, exists := s.byUsername[strings.ToLower(upd.Username)]; exists {
+			return nil, errors.New("username already exists")
+		}
+		delete(s.byUsername, strings.ToLower(u.Username))
+		u.Username = upd.Username
+		s.byUsername[strings.ToLower(u.Username)] = u
+	}
+	// handle email uniqueness
+	if upd.Email != "" && !strings.EqualFold(upd.Email, u.Email) {
+		if _, exists := s.byEmail[strings.ToLower(upd.Email)]; exists {
+			return nil, errors.New("email already exists")
+		}
+		delete(s.byEmail, strings.ToLower(u.Email))
+		u.Email = upd.Email
+		s.byEmail[strings.ToLower(u.Email)] = u
+	}
+	// flags (caller already prepared desired values)
+	u.IsActive = upd.IsActive
+	u.IsAdmin = upd.IsAdmin
+	// Note: password is not updated here
+	return &User{ID: u.ID, Username: u.Username, Email: u.Email, IsActive: u.IsActive, IsAdmin: u.IsAdmin}, nil
+}
+
+func (s *UsersStore) Delete(id int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.usersByID[id]
+	if !ok {
+		return false
+	}
+	delete(s.byUsername, strings.ToLower(u.Username))
+	delete(s.byEmail, strings.ToLower(u.Email))
+	delete(s.usersByID, id)
+	return true
+}
+
+// -------------------- TOKENS --------------------
 
 type RefreshEntry struct {
 	UserID    int64
@@ -84,7 +140,7 @@ type RefreshEntry struct {
 
 type RefreshStore struct {
 	mu   sync.RWMutex
-	data map[string]RefreshEntry
+	data map[string]RefreshEntry // jti -> entry
 }
 
 func NewRefreshStore() *RefreshStore {
@@ -196,10 +252,7 @@ type refreshPayload struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-func registerAuthRoutes(r *mux.Router) {
-	users := NewUsersStore()
-	refreshes := NewRefreshStore()
-
+func registerAuthRoutes(r *mux.Router, users *UsersStore, refreshes *RefreshStore) {
 	api := r.PathPrefix("/api").Subrouter()
 	auth := api.PathPrefix("/auth").Subrouter()
 
@@ -230,13 +283,14 @@ func registerAuthRoutes(r *mux.Router) {
 			Email:        p.Email,
 			PasswordHash: string(hash),
 			IsActive:     true,
+			IsAdmin:      false,
 		}
 		created, err := users.Create(user)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		writeJSON(w, created)
+		writeJSON(w, &User{ID: created.ID, Username: created.Username, Email: created.Email, IsActive: created.IsActive, IsAdmin: created.IsAdmin})
 	}).Methods(http.MethodPost, http.MethodOptions)
 
 	// POST /api/auth/login
@@ -276,7 +330,7 @@ func registerAuthRoutes(r *mux.Router) {
 			RefreshToken: refresh,
 			TokenType:    "Bearer",
 			ExpiresIn:    int64(accessTTL.Seconds()),
-			User:         &User{ID: u.ID, Username: u.Username, Email: u.Email, IsActive: u.IsActive},
+			User:         &User{ID: u.ID, Username: u.Username, Email: u.Email, IsActive: u.IsActive, IsAdmin: u.IsAdmin},
 		})
 	}).Methods(http.MethodPost, http.MethodOptions)
 
@@ -386,6 +440,142 @@ func registerAuthRoutes(r *mux.Router) {
 			http.Error(w, "user not found", http.StatusUnauthorized)
 			return
 		}
-		writeJSON(w, &User{ID: u.ID, Username: u.Username, Email: u.Email, IsActive: u.IsActive})
+		writeJSON(w, &User{ID: u.ID, Username: u.Username, Email: u.Email, IsActive: u.IsActive, IsAdmin: u.IsAdmin})
 	}).Methods(http.MethodGet, http.MethodOptions)
+}
+
+// admin middleware util
+func requireAdmin(users *UsersStore, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, claims, err := parseAndValidateAccessToken(r)
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		sub, _ := claims["sub"].(string)
+		id, err := strconv.ParseInt(sub, 10, 64)
+		if err != nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		u, ok := users.GetByID(id)
+		if !ok || !u.IsAdmin {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// Admin endpoints under /api/users
+func registerAdminRoutes(r *mux.Router, users *UsersStore) {
+	api := r.PathPrefix("/api").Subrouter()
+	usersR := api.PathPrefix("/users").Subrouter()
+
+	// GET /api/users - list all users
+	usersR.HandleFunc("", requireAdmin(users, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, users.GetAll())
+	})).Methods(http.MethodGet, http.MethodOptions)
+
+	// GET /api/users/{id}
+	usersR.HandleFunc("/{id}", requireAdmin(users, func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		idStr := vars["id"]
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		u, ok := users.GetByID(id)
+		if !ok {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		writeJSON(w, &User{ID: u.ID, Username: u.Username, Email: u.Email, IsActive: u.IsActive, IsAdmin: u.IsAdmin})
+	})).Methods(http.MethodGet, http.MethodOptions)
+
+	// PUT /api/users/{id}
+	type updateUserPayload struct {
+		Username *string `json:"username,omitempty"`
+		Email    *string `json:"email,omitempty"`
+		IsActive *bool   `json:"isActive,omitempty"`
+		IsAdmin  *bool   `json:"isAdmin,omitempty"`
+	}
+	usersR.HandleFunc("/{id}", requireAdmin(users, func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		idStr := vars["id"]
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		var p updateUserPayload
+		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+			http.Error(w, "invalid JSON body", http.StatusBadRequest)
+			return
+		}
+		u, ok := users.GetByID(id)
+		if !ok {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		upd := &User{}
+		if p.Username != nil {
+			upd.Username = strings.TrimSpace(*p.Username)
+		}
+		if p.Email != nil {
+			upd.Email = strings.TrimSpace(*p.Email)
+		}
+		if p.IsActive != nil {
+			upd.IsActive = *p.IsActive
+		} else {
+			upd.IsActive = u.IsActive
+		}
+		if p.IsAdmin != nil {
+			upd.IsAdmin = *p.IsAdmin
+		} else {
+			upd.IsAdmin = u.IsAdmin
+		}
+		updated, err := users.Update(id, upd)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, updated)
+	})).Methods(http.MethodPut, http.MethodOptions)
+
+	// DELETE /api/users/{id}
+	usersR.HandleFunc("/{id}", requireAdmin(users, func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		idStr := vars["id"]
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			http.Error(w, "invalid id", http.StatusBadRequest)
+			return
+		}
+		if !users.Delete(id) {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})).Methods(http.MethodDelete, http.MethodOptions)
+}
+
+// seed default admin user (username: admin, password: admin123)
+func seedDefaultAdmin(users *UsersStore) error {
+	if _, ok := users.GetByUsername("admin"); ok {
+		return nil
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	_, err = users.Create(&User{
+		Username:     "admin",
+		Email:        "admin@example.com",
+		PasswordHash: string(hash),
+		IsActive:     true,
+		IsAdmin:      true,
+	})
+	return err
 }

@@ -17,135 +17,171 @@ go run .
 примеры запросов в Postman ПРИ url: http://localhost:8080:
 
 
-## Аутентификация (JWT)
+## Админ (управление пользователями)
 
 Регистрация → вход → использование access токена → обновление → выход.
-
-### POST /api/auth/register
-
-Запрос
-
-```
-POST http://localhost:8080/api/auth/register
-Content-Type: application/json
-
-{
-  "username": "john",
-  "email": "john@example.com",
-  "password": "secret123"
-}
-```
-
-Ответ
-
-```
-200 OK
-Content-Type: application/json
-
-{
-  "id": 1,
-  "username": "john",
-  "email": "john@example.com",
-  "isActive": true
-}
-```
 
 ### POST /api/auth/login
 
 Запрос
 
 ```
+
 POST http://localhost:8080/api/auth/login
 Content-Type: application/json
 
-{
-  "username": "john",
-  "password": "secret123"
+{ 
+    "username": "admin", 
+    "password": "admin123"
 }
 ```
 
 Ответ
 
 ```
+
 200 OK
 Content-Type: application/json
 
 {
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTg2MzEzMDcsImlhdCI6MTc1ODAyNjUwNywianRpIjoiMjk0NTY5NWM1YmVmNTc3NjU2ODgyYzQ1YTBjNzk1MTAiLCJzdWIiOiIxIiwidHlwZSI6InJlZnJlc2giLCJ1c2VybmFtZSI6ImpvaG4ifQ.5U6-y8ywmR5OqAuo8O9mgUryhc9eQW-AqQDj1gx6exQ",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTgwMjczMjcsImlhdCI6MTc1ODAyNjQyNywic3ViIjoiMSIsInR5cGUiOiJhY2Nlc3MiLCJ1c2VybmFtZSI6ImpvaG4ifQ.0y_XVuouCBlaorxgk4d9wkRebdAE1BcvGYVNCT8Wvv0",
-  "tokenType": "Bearer",
-  "expiresIn": 900,
-  "user": {
-    "id": 1,
-    "username": "john",
-    "email": "john@example.com",
-    "isActive": true
-  }
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTgxMDcwMjMsImlhdCI6MTc1ODEwNjEyMywic3ViIjoiMSIsInR5cGUiOiJhY2Nlc3MiLCJ1c2VybmFtZSI6ImFkbWluIn0.DN5qOGFWNZSe_c2bcO78R8B9JKqJBXj6C_212R9P0Go",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTg3MTA5MjMsImlhdCI6MTc1ODEwNjEyMywianRpIjoiYzY2NTZjY2QyNzc5MTg2YjAxYzdhZGVkNGEzNzcxMzYiLCJzdWIiOiIxIiwidHlwZSI6InJlZnJlc2giLCJ1c2VybmFtZSI6ImFkbWluIn0.I9WckyNS-zKB4aw8qkd1-Po0LXpOPe74FDwlIGaanog",
+    "tokenType": "Bearer",
+    "expiresIn": 900,
+    "user": {
+        "id": 1,
+        "username": "admin",
+        "email": "admin@example.com",
+        "isActive": true,
+        "isAdmin": true
+    }
 }
 ```
 
-### GET /api/auth/me
+## GET /api/users
 
-Передавайте access токен:
+Запрос
 
 ```
-GET http://localhost:8080/api/auth/me
+
+GET http://localhost:8080/api/users
 Authorization: Bearer <accessToken>
 ```
 
 Ответ
 
 ```
-200 OK
+
+[
+    {
+        "id": 2,
+        "username": "john",
+        "email": "john@example.com",
+        "isActive": true,
+        "isAdmin": false
+    },
+    {
+        "id": 3,
+        "username": "emily",
+        "email": "emily@example.com",
+        "isActive": true,
+        "isAdmin": false
+    },
+    {
+        "id": 1,
+        "username": "admin",
+        "email": "admin@example.com",
+        "isActive": true,
+        "isAdmin": true
+    }
+]
+```
+
+## GET /api/users/{id}
+
+Запрос
+
+```
+
+GET http://localhost:8080/api/users/2
+Authorization: Bearer <accessToken>
+```
+
+Ответ
+
+```
+
 {
-  "id": 1,
+    "id": 2,
+    "username": "john",
+    "email": "john@example.com",
+    "isActive": true,
+    "isAdmin": false
+}
+```
+
+## PUT /api/users/{id}
+
+Запрос
+
+```
+
+PUT http://localhost:8080/api/users/2
+Content-Type: application/json,
+Authorization: Bearer <accessToken>
+
+{
   "username": "john",
-  "email": "john@example.com",
-  "isActive": true
-}
-```
-
-### POST /api/auth/refresh
-
-Запрос
-
-```
-POST http://localhost:8080/api/auth/refresh
-Content-Type: application/json
-
-{
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTgwMjczMjcsImlhdCI6MTc1ODAyNjQyNywic3ViIjoiMSIsInR5cGUiOiJhY2Nlc3MiLCJ1c2VybmFtZSI6ImpvaG4ifQ.0y_XVuouCBlaorxgk4d9wkRebdAE1BcvGYVNCT8Wvv0"
+  "email": "johnDoe@example.com",
+  "isActive": true,
+  "isAdmin": false
 }
 ```
 
 Ответ
 
 ```
-200 OK
+
 {
-  "accessToken": "eyJhbGciOiJJKHJYgjgygjgIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTgwMjczMjcsImc3ViIjoiMSIsInR5cGUiOiJhY2Nlc3MiLCJ1c2VybmFtZSI6ImpvaG4ifQ.0y_XVuouCBlaorxgk4d9wkRebdAE1BcvGYVNCT8Wvv0",
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTgwMjczMjcsImlhdCI6HKHuhkVFGGHDGRFDtrdhjkuKJBHUUI83579HBGJGFUMTc1ODAyNjQyNywic3ViIjoiMSIsInR5cGUiOiJhY2Nlc3MiLCJ1c2VybmFtZSI6ImpvaG4ifQ.0y_XVuouCBlaorxgk4d9wkRebdAE1BcvGYVNCT8Wvv0"",
-  "tokenType": "Bearer",
-  "expiresIn": 900
+  "username": "john",
+  "email": "johnDoe@example.com",
+  "isActive": true,
+  "isAdmin": false
 }
 ```
 
-### POST /api/auth/logout
+## DELETE /api/users{id}
 
 Запрос
 
 ```
-POST http://localhost:8080/api/auth/logout
-Content-Type: application/json
 
-{
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTgwMjczMjcsImlhdCI6MTc1ODAyNjQyNywic3ViIjoiMSIsInR5cGUiOiJhY2Nlc3MiLCJ1c2VybmFtZSI6ImpvaG4ifQ.0y_XVuouCBlaorxgk4d9wkRebdAE1BcvGYVNCT8Wvv0"
-}
+DELETE http://localhost:8080/api/users/2
+Authorization: Bearer <accessToken>
 ```
 
 Ответ
 
 ```
-200 OK
-{}
+
+204 NO Content
+
+GET http://localhost:8080/api/users
+
+[
+    {
+        "id": 3,
+        "username": "emily",
+        "email": "emily@example.com",
+        "isActive": true,
+        "isAdmin": false
+    },
+    {
+        "id": 1,
+        "username": "admin",
+        "email": "admin@example.com",
+        "isActive": true,
+        "isAdmin": true
+    }
+]
 ```
