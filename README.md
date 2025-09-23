@@ -16,172 +16,33 @@ go run .
 
 примеры запросов в Postman ПРИ url: http://localhost:8080:
 
+### Как это работает (up-down)
 
-## Админ (управление пользователями)
+- **BuildRouter()**: собирает весь HTTP, подключает обработчики, а также инициализирует хранилища: задачи (Store), пользователи (UsersStore), рефреш‑токены (RefreshStore). Там же выполняется сид администратора (admin/admin123).
 
-Регистрация → вход → использование access токена → обновление → выход.
 
-### POST /api/auth/login
+- **httptest**: тесты не поднимают реальный порт. Вместо этого `httptest.NewRecorder()` и `httptest.NewRequest()` прогоняют реальные HTTP‑запросы прямо через роутер в памяти.
 
-Запрос
 
-```
+- **Авторизация**: тест логинится админом на `/api/auth/login`, получает `accessToken`, и использует его в заголовке `Authorization: Bearer ...` для запросов к админским эндпоинтам.
 
-POST http://localhost:8080/api/auth/login
-Content-Type: application/json
 
-{ 
-    "username": "admin", 
-    "password": "admin123"
-}
-```
+- **Изоляция**: каждое выполнение тестов создаёт новые in-memoru storage, поэтому состояние чистое и независимое от запуска к запуску.
 
-Ответ
+
+- `integration_test.go` — сценарий «сверху вниз»: вход админом → список пользователей → создание и чтение задач.
+
+## Вывод
 
 ```
-
-200 OK
-Content-Type: application/json
-
-{
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTgxMDcwMjMsImlhdCI6MTc1ODEwNjEyMywic3ViIjoiMSIsInR5cGUiOiJhY2Nlc3MiLCJ1c2VybmFtZSI6ImFkbWluIn0.DN5qOGFWNZSe_c2bcO78R8B9JKqJBXj6C_212R9P0Go",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTg3MTA5MjMsImlhdCI6MTc1ODEwNjEyMywianRpIjoiYzY2NTZjY2QyNzc5MTg2YjAxYzdhZGVkNGEzNzcxMzYiLCJzdWIiOiIxIiwidHlwZSI6InJlZnJlc2giLCJ1c2VybmFtZSI6ImFkbWluIn0.I9WckyNS-zKB4aw8qkd1-Po0LXpOPe74FDwlIGaanog",
-    "tokenType": "Bearer",
-    "expiresIn": 900,
-    "user": {
-        "id": 1,
-        "username": "admin",
-        "email": "admin@example.com",
-        "isActive": true,
-        "isAdmin": true
-    }
-}
+go run .
+Server listening on :8080
 ```
 
-## GET /api/users
-
-Запрос
-
 ```
-
-GET http://localhost:8080/api/users
-Authorization: Bearer <accessToken>
-```
-
-Ответ
-
-```
-
-[
-    {
-        "id": 2,
-        "username": "john",
-        "email": "john@example.com",
-        "isActive": true,
-        "isAdmin": false
-    },
-    {
-        "id": 3,
-        "username": "emily",
-        "email": "emily@example.com",
-        "isActive": true,
-        "isAdmin": false
-    },
-    {
-        "id": 1,
-        "username": "admin",
-        "email": "admin@example.com",
-        "isActive": true,
-        "isAdmin": true
-    }
-]
-```
-
-## GET /api/users/{id}
-
-Запрос
-
-```
-
-GET http://localhost:8080/api/users/2
-Authorization: Bearer <accessToken>
-```
-
-Ответ
-
-```
-
-{
-    "id": 2,
-    "username": "john",
-    "email": "john@example.com",
-    "isActive": true,
-    "isAdmin": false
-}
-```
-
-## PUT /api/users/{id}
-
-Запрос
-
-```
-
-PUT http://localhost:8080/api/users/2
-Content-Type: application/json,
-Authorization: Bearer <accessToken>
-
-{
-  "username": "john",
-  "email": "johnDoe@example.com",
-  "isActive": true,
-  "isAdmin": false
-}
-```
-
-Ответ
-
-```
-
-{
-  "username": "john",
-  "email": "johnDoe@example.com",
-  "isActive": true,
-  "isAdmin": false
-}
-```
-
-## DELETE /api/users{id}
-
-Запрос
-
-```
-
-DELETE http://localhost:8080/api/users/2
-Authorization: Bearer <accessToken>
-```
-
-Ответ
-
-```
-
-204 NO Content
-
-GET http://localhost:8080/api/users
-
-[
-    {
-        "id": 3,
-        "username": "emily",
-        "email": "emily@example.com",
-        "isActive": true,
-        "isAdmin": false
-    },
-    {
-        "id": 1,
-        "username": "admin",
-        "email": "admin@example.com",
-        "isActive": true,
-        "isAdmin": true
-    }
-]
+go test -v ./...
+=== RUN   TestTopDown_Flow_AdminAuthUsersTasks
+--- PASS: TestTopDown_Flow_AdminAuthUsersTasks (0.16s)
+PASS
+ok      todoexample  0.165s
 ```
