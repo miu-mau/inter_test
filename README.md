@@ -16,172 +16,41 @@ go run .
 
 примеры запросов в Postman ПРИ url: http://localhost:8080:
 
+## Отчет по интеграционному тестированию (Big Bang)
 
-## Админ (управление пользователями)
+Ниже результаты применения подхода «большого взрыва» к этому проекту
 
-Регистрация → вход → использование access токена → обновление → выход.
+### Охват сценариев
+- **Аутентификация**: `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `GET /api/auth/me`.
 
-### POST /api/auth/login
+- **Админ**: `GET /api/users`, `GET/PUT/DELETE /api/users/{id}` с `Authorization: Bearer <accessToken>`.
 
-Запрос
+- **Задачи**: `POST /tasks`, `GET /tasks`, `GET /tasks?completed=`, `GET/PUT/DELETE /tasks/{id}`.
 
-```
+- **Негативные кейсы**: невалидный JSON, пустые поля, невалидные идентификаторы, неверные типы query-параметров, запреты по методу.
 
-POST http://localhost:8080/api/auth/login
-Content-Type: application/json
+### Фактические результаты (выдержка)
 
-{ 
-    "username": "admin", 
-    "password": "admin123"
-}
-```
+- Сервер запускается: `go run .`, ответы идут на `http://localhost:8080`.
 
-Ответ
+- Логин админа (`admin/admin123`) возвращает `200 OK` и пары токенов `access/refresh`.
 
-```
+- Доступ к `GET /api/users` с валидным `accessToken` — `200 OK` (RBAC работает).
 
-200 OK
-Content-Type: application/json
+- Создание задачи `POST /tasks` — `201 Created` (пример: `{ "title": "Test task", ... }`).
 
-{
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTgxMDcwMjMsImlhdCI6MTc1ODEwNjEyMywic3ViIjoiMSIsInR5cGUiOiJhY2Nlc3MiLCJ1c2VybmFtZSI6ImFkbWluIn0.DN5qOGFWNZSe_c2bcO78R8B9JKqJBXj6C_212R9P0Go",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NTg3MTA5MjMsImlhdCI6MTc1ODEwNjEyMywianRpIjoiYzY2NTZjY2QyNzc5MTg2YjAxYzdhZGVkNGEzNzcxMzYiLCJzdWIiOiIxIiwidHlwZSI6InJlZnJlc2giLCJ1c2VybmFtZSI6ImFkbWluIn0.I9WckyNS-zKB4aw8qkd1-Po0LXpOPe74FDwlIGaanog",
-    "tokenType": "Bearer",
-    "expiresIn": 900,
-    "user": {
-        "id": 1,
-        "username": "admin",
-        "email": "admin@example.com",
-        "isActive": true,
-        "isAdmin": true
-    }
-}
-```
+- `GET /tasks` возвращает список задач и корректно фильтрует по `?completed=true|false` (при неверном булевом значении — `400 Bad Request`).
 
-## GET /api/users
+### Выявленные дефекты/аномалии и замечания
 
-Запрос
+- **Единство формата ошибок**: часть ошибок отдается через `http.Error` (content-type по умолчанию `text/plain`), а часть успешных ответов — в JSON. Для консистентности лучше возвращать JSON-ошибки с единым контрактом и заголовком `application/json`.
 
-```
 
-GET http://localhost:8080/api/users
-Authorization: Bearer <accessToken>
-```
+- **Публичные эндпоинты задач**: `tasks` не требуют аутентификации. Если предполагается приватность, стоит ограничить доступ JWT или ввести роли.
 
-Ответ
 
-```
+- **Методы и сообщения об ошибках**: в ряде мест возвращается `405 Method Not Allowed`, но без тела JSON; стоит унифицировать контракт.
 
-[
-    {
-        "id": 2,
-        "username": "john",
-        "email": "john@example.com",
-        "isActive": true,
-        "isAdmin": false
-    },
-    {
-        "id": 3,
-        "username": "emily",
-        "email": "emily@example.com",
-        "isActive": true,
-        "isAdmin": false
-    },
-    {
-        "id": 1,
-        "username": "admin",
-        "email": "admin@example.com",
-        "isActive": true,
-        "isAdmin": true
-    }
-]
-```
+### Выводы о подходе Big Bang
 
-## GET /api/users/{id}
-
-Запрос
-
-```
-
-GET http://localhost:8080/api/users/2
-Authorization: Bearer <accessToken>
-```
-
-Ответ
-
-```
-
-{
-    "id": 2,
-    "username": "john",
-    "email": "john@example.com",
-    "isActive": true,
-    "isAdmin": false
-}
-```
-
-## PUT /api/users/{id}
-
-Запрос
-
-```
-
-PUT http://localhost:8080/api/users/2
-Content-Type: application/json,
-Authorization: Bearer <accessToken>
-
-{
-  "username": "john",
-  "email": "johnDoe@example.com",
-  "isActive": true,
-  "isAdmin": false
-}
-```
-
-Ответ
-
-```
-
-{
-  "username": "john",
-  "email": "johnDoe@example.com",
-  "isActive": true,
-  "isAdmin": false
-}
-```
-
-## DELETE /api/users{id}
-
-Запрос
-
-```
-
-DELETE http://localhost:8080/api/users/2
-Authorization: Bearer <accessToken>
-```
-
-Ответ
-
-```
-
-204 NO Content
-
-GET http://localhost:8080/api/users
-
-[
-    {
-        "id": 3,
-        "username": "emily",
-        "email": "emily@example.com",
-        "isActive": true,
-        "isAdmin": false
-    },
-    {
-        "id": 1,
-        "username": "admin",
-        "email": "admin@example.com",
-        "isActive": true,
-        "isAdmin": true
-    }
-]
-```
+- Подход позволил быстро проверить сквозные сценарии
